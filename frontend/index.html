@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Gym Trainer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131c;
+    --surface2: #1c1c2a;
+    --border: rgba(255,255,255,0.07);
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --green: #00e096;
+    --amber: #ffb400;
+    --red: #ff4d6d;
+    --text: #f0f0f8;
+    --muted: #8888aa;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; overflow-x:hidden; }
+
+  /* Layout */
+  .app { display:grid; grid-template-columns:260px 1fr 300px; grid-template-rows:64px 1fr; min-height:100vh; }
+
+  /* Header */
+  header { grid-column:1/-1; display:flex; align-items:center; gap:16px; padding:0 24px; background:var(--surface); border-bottom:1px solid var(--border); }
+  .logo { font-size:22px; font-weight:700; letter-spacing:-0.5px; }
+  .logo span { color:var(--accent); }
+  .header-status { margin-left:auto; display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* Sidebar */
+  .sidebar { background:var(--surface); border-right:1px solid var(--border); padding:20px 16px; overflow-y:auto; }
+  .sidebar-section { margin-bottom:28px; }
+  .sidebar-label { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; padding-left:4px; }
+
+  .exercise-card {
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border-radius:var(--radius-sm); cursor:pointer; transition:all .15s;
+    border:1px solid transparent; margin-bottom:4px;
+  }
+  .exercise-card:hover { background:var(--surface2); }
+  .exercise-card.active { background:rgba(108,99,255,.15); border-color:rgba(108,99,255,.4); }
+  .exercise-icon { font-size:22px; width:36px; text-align:center; }
+  .exercise-info { flex:1; }
+  .exercise-name { font-size:14px; font-weight:500; }
+  .exercise-muscle { font-size:12px; color:var(--muted); }
+
+  /* Main area */
+  .main { background:var(--bg); padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+
+  /* Camera section */
+  .camera-section { position:relative; border-radius:var(--radius); overflow:hidden; background:#000; aspect-ratio:16/9; }
+  #video { width:100%; height:100%; object-fit:cover; display:block; transform:scaleX(-1); }
+  #canvas { position:absolute; inset:0; width:100%; height:100%; transform:scaleX(-1); }
+  .camera-overlay { position:absolute; inset:0; display:flex; flex-direction:column; pointer-events:none; }
+
+  /* HUD */
+  .hud-top { display:flex; justify-content:space-between; padding:16px; }
+  .hud-box { background:rgba(0,0,0,.6); backdrop-filter:blur(8px); border-radius:var(--radius-sm); padding:8px 16px; }
+  .hud-rep { font-size:36px; font-weight:700; line-height:1; }
+  .hud-label { font-size:11px; color:var(--muted); margin-top:2px; }
+  .hud-score { font-size:28px; font-weight:700; }
+  .score-good { color:var(--green); }
+  .score-warn { color:var(--amber); }
+  .score-bad  { color:var(--red); }
+
+  /* Phase indicator */
+  .hud-bottom { margin-top:auto; padding:12px 16px; background:linear-gradient(transparent,rgba(0,0,0,.8)); }
+  .feedback-text { font-size:15px; font-weight:500; }
+  .phase-bar { display:flex; gap:6px; margin-top:8px; }
+  .phase-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:all .3s; }
+  .phase-dot.active { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+
+  /* Controls */
+  .controls { display:flex; gap:10px; align-items:center; }
+  .btn {
+    padding:10px 20px; border-radius:var(--radius-sm); border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:14px; cursor:pointer;
+    transition:all .15s; font-weight:500;
+  }
+  .btn:hover { background:var(--surface2); border-color:rgba(255,255,255,.15); }
+  .btn-primary { background:var(--accent); border-color:transparent; color:#fff; }
+  .btn-primary:hover { background:#7c74ff; }
+  .btn-danger { background:rgba(255,77,109,.15); border-color:rgba(255,77,109,.3); color:var(--red); }
+  .btn-danger:hover { background:rgba(255,77,109,.25); }
+
+  /* Set tracker */
+  .set-tracker { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .set-item { padding:6px 12px; border-radius:var(--radius-sm); background:var(--surface); border:1px solid var(--border); font-size:13px; }
+  .set-item.done { background:rgba(0,224,150,.1); border-color:rgba(0,224,150,.3); color:var(--green); }
+
+  /* Stats row */
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .stat-card { background:var(--surface); border-radius:var(--radius); padding:16px; border:1px solid var(--border); }
+  .stat-value { font-size:28px; font-weight:700; }
+  .stat-label { font-size:12px; color:var(--muted); margin-top:4px; }
+
+  /* Right panel */
+  .right-panel { background:var(--surface); border-left:1px solid var(--border); padding:20px 16px; overflow-y:auto; display:flex; flex-direction:column; gap:20px; }
+  .panel-card { background:var(--surface2); border-radius:var(--radius); padding:16px; border:1px solid var(--border); }
+  .panel-title { font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; margin-bottom:12px; }
+
+  /* Coaching bubble */
+  .coaching-bubble { background:rgba(108,99,255,.1); border:1px solid rgba(108,99,255,.25); border-radius:var(--radius); padding:14px; font-size:14px; line-height:1.6; }
+  .coaching-bubble .coach-cue { font-weight:500; color:var(--text); }
+  .coaching-bubble .coach-motivation { color:var(--accent); font-size:13px; margin-top:6px; }
+
+  /* Joint angles table */
+  .angles-grid { display:grid; gap:6px; }
+  .angle-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); }
+  .angle-row:last-child { border-bottom:none; }
+  .angle-name { font-size:13px; color:var(--muted); }
+  .angle-value { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+
+  /* Form bar */
+  .form-bar-track { height:6px; background:rgba(255,255,255,.1); border-radius:3px; overflow:hidden; margin:8px 0; }
+  .form-bar-fill { height:100%; border-radius:3px; transition:width .4s, background .4s; }
+
+  /* Angle history chart */
+  .chart-wrap { height:120px; }
+
+  /* Corrections list */
+  .correction-pill {
+    display:inline-flex; align-items:center; gap:6px; padding:5px 10px;
+    border-radius:20px; font-size:12px; background:rgba(255,180,0,.1);
+    border:1px solid rgba(255,180,0,.25); color:var(--amber); margin:3px 3px 3px 0;
+  }
+  .correction-pill.error { background:rgba(255,77,109,.1); border-color:rgba(255,77,109,.25); color:var(--red); }
+
+  /* Voice toggle */
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; }
+  .toggle { position:relative; width:40px; height:22px; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider { position:absolute; inset:0; background:var(--surface); border-radius:11px; cursor:pointer; border:1px solid var(--border); transition:.2s; }
+  .toggle-slider:before { content:''; position:absolute; width:16px; height:16px; left:2px; top:2px; background:var(--muted); border-radius:50%; transition:.2s; }
+  .toggle input:checked + .toggle-slider { background:var(--accent); border-color:var(--accent); }
+  .toggle input:checked + .toggle-slider:before { transform:translateX(18px); background:#fff; }
+
+  /* Alerts */
+  .alert { padding:10px 14px; border-radius:var(--radius-sm); font-size:13px; margin-bottom:8px; }
+  .alert-info { background:rgba(108,99,255,.1); border:1px solid rgba(108,99,255,.2); }
+  .alert-warn { background:rgba(255,180,0,.1); border:1px solid rgba(255,180,0,.2); color:var(--amber); }
+
+  /* Modal */
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100; align-items:center; justify-content:center; }
+  .modal-bg.open { display:flex; }
+  .modal { background:var(--surface); border-radius:var(--radius); padding:28px; max-width:480px; width:90%; border:1px solid var(--border); }
+  .modal h2 { font-size:20px; margin-bottom:16px; }
+  .modal-content { font-size:14px; line-height:1.7; color:var(--muted); }
+  .modal-report { white-space:pre-wrap; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  /* No camera state */
+  .no-camera { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:var(--surface2); }
+  .no-camera svg { opacity:.3; }
+  .no-camera p { color:var(--muted); font-size:15px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Header -->
+<header>
+  <div class="logo">AI <span>Gym</span> Trainer</div>
+  <div id="exercise-title" style="font-size:16px;font-weight:600;margin-left:16px;"></div>
+  <div class="header-status">
+    <div class="status-dot" id="status-dot" style="background:var(--muted)"></div>
+    <span id="status-text">Ready</span>
+  </div>
+</header>
+
+<!-- Sidebar: exercise list -->
+<aside class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Choose Exercise</div>
+    <div id="exercise-list"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Workout Setup</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label style="font-size:12px;color:var(--muted);">Target reps per set</label>
+      <input type="number" id="target-reps" value="10" min="1" max="50"
+        style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:14px;width:100%"/>
+
+      <label style="font-size:12px;color:var(--muted);margin-top:4px;">Fitness level</label>
+      <select id="fitness-level"
+        style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:14px;width:100%">
+        <option value="beginner">Beginner</option>
+        <option value="intermediate" selected>Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Sets Completed</div>
+    <div class="set-tracker" id="set-tracker"></div>
+    <button class="btn" style="margin-top:10px;width:100%;" onclick="completeSet()">Mark Set Done ✓</button>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Voice Coaching</div>
+    <div class="toggle-row">
+      <span style="font-size:13px;">Text-to-speech</span>
+      <label class="toggle"><input type="checkbox" id="voice-toggle" checked/><span class="toggle-slider"></span></label>
+    </div>
+    <div class="toggle-row" style="margin-top:10px;">
+      <span style="font-size:13px;">Auto AI feedback</span>
+      <label class="toggle"><input type="checkbox" id="auto-coach-toggle" checked/><span class="toggle-slider"></span></label>
+    </div>
+  </div>
+</aside>
+
+<!-- Main content -->
+<main class="main">
+  <!-- Camera -->
+  <div class="camera-section">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div id="no-camera" class="no-camera">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+      <p>Click "Start Camera" to begin your workout</p>
+    </div>
+
+    <div class="camera-overlay" id="hud" style="display:none;">
+      <div class="hud-top">
+        <div class="hud-box">
+          <div class="hud-rep" id="hud-reps">0</div>
+          <div class="hud-label">REPS</div>
+        </div>
+        <div class="hud-box" style="text-align:right;">
+          <div class="hud-score" id="hud-score">--</div>
+          <div class="hud-label">FORM SCORE</div>
+        </div>
+      </div>
+      <div class="hud-bottom">
+        <div class="feedback-text" id="hud-feedback">Position yourself in the camera</div>
+        <div class="phase-bar">
+          <div class="phase-dot" id="pd-bottom"></div>
+          <div class="phase-dot" id="pd-mid"></div>
+          <div class="phase-dot" id="pd-top"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-primary" id="btn-camera" onclick="toggleCamera()">▶ Start Camera</button>
+    <button class="btn" id="btn-pause" onclick="togglePause()" style="display:none;">⏸ Pause</button>
+    <button class="btn btn-danger" onclick="resetReps()">↺ Reset Reps</button>
+    <button class="btn" onclick="getAICoaching()">🤖 Ask AI Coach</button>
+    <button class="btn" onclick="generatePlan()">📅 Workout Plan</button>
+    <span style="margin-left:auto;font-size:13px;color:var(--muted);" id="fps-display"></span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-total-reps">0</div>
+      <div class="stat-label">Total reps this session</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-avg-score">--</div>
+      <div class="stat-label">Avg. form score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-sets">0</div>
+      <div class="stat-label">Sets completed</div>
+    </div>
+  </div>
+</main>
+
+<!-- Right panel -->
+<aside class="right-panel">
+
+  <!-- AI Coaching bubble -->
+  <div class="panel-card">
+    <div class="panel-title">AI Coach</div>
+    <div class="coaching-bubble" id="coaching-bubble">
+      <div class="coach-cue" id="coach-cue">Start your workout to get personalised feedback!</div>
+      <div class="coach-motivation" id="coach-motivation"></div>
+    </div>
+    <div id="correction-pills" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Form score bar -->
+  <div class="panel-card">
+    <div class="panel-title">Form Quality</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <span id="form-score-big" style="font-size:36px;font-weight:700;">--</span>
+      <span style="font-size:13px;color:var(--muted);">/100</span>
+    </div>
+    <div class="form-bar-track">
+      <div class="form-bar-fill" id="form-bar-fill" style="width:0%;background:var(--green);"></div>
+    </div>
+    <div id="form-status-label" style="font-size:12px;color:var(--muted);"></div>
+  </div>
+
+  <!-- Joint angles -->
+  <div class="panel-card">
+    <div class="panel-title">Joint Angles</div>
+    <div class="angles-grid" id="angles-grid">
+      <div style="color:var(--muted);font-size:13px;">Waiting for pose detection…</div>
+    </div>
+  </div>
+
+  <!-- Angle history chart -->
+  <div class="panel-card">
+    <div class="panel-title">Angle History</div>
+    <div class="chart-wrap">
+      <canvas id="angle-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Rep phase -->
+  <div class="panel-card">
+    <div class="panel-title">Current Phase</div>
+    <div id="phase-indicator" style="font-size:24px;font-weight:700;color:var(--accent);">Idle</div>
+    <div id="phase-desc" style="font-size:12px;color:var(--muted);margin-top:4px;"></div>
+  </div>
+
+</aside>
+</div>
+
+<!-- Modal for AI responses -->
+<div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
+  <div class="modal">
+    <h2 id="modal-title">AI Coach</h2>
+    <div class="modal-content">
+      <div id="modal-body" class="modal-report"></div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:20px;width:100%;" onclick="closeModalDirect()">Close</button>
+  </div>
+</div>
+
+<script src="trainer.js"></script>
+</body>
+</html>

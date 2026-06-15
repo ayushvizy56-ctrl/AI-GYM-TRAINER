@@ -1,0 +1,11 @@
+flask==3.0.0
+flask-cors==4.0.0
+mediapipe==0.10.9
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+anthropic==0.25.0
+tensorflow==2.15.0
+scikit-learn==1.4.0
+pandas==2.2.0
+Pillow==10.2.0
+python-dotenv==1.0.0
