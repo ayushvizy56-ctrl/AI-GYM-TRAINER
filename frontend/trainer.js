@@ -9,7 +9,7 @@
  *  - Chart.js angle history graph
  */
 
-const API = 'http://localhost:5000/api';
+const API = 'https://ai-gym-trainer-z20n.onrender.com/api';
 const SESSION_ID = 'session_' + Date.now();
 
 // ── State ─────────────────────────────────────────────────────────────────────
