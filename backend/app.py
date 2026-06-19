@@ -38,7 +38,9 @@ def decode_frame(b64_image: str) -> np.ndarray:
         b64_image = b64_image.split(",")[1]
     img_bytes = base64.b64decode(b64_image)
     arr = np.frombuffer(img_bytes, np.uint8)
-    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    frame = cv2.resize(frame, (320, 240))
+    return frame
 
 
 def encode_frame(frame: np.ndarray) -> str:
