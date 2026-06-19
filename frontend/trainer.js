@@ -508,7 +508,7 @@ initChart();
 selectExercise('squat');
 
 // Check backend health
-fetch(`http://localhost:5000/health`)
+fetch(`http://https://ai-gym-trainer-z20n.onrender.com/health`)
   .then(r => r.json())
   .then(d => {
     setStatus('active', d.coach_available ? '✓ AI Ready' : '⚠ No AI key');
